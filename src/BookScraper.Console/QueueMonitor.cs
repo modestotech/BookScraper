@@ -1,33 +1,39 @@
 ﻿using BookScraper.Console.MessageBus;
 
-internal class QueueChecker
+internal class QueueMonitor
 {
     private readonly CancellationTokenSource _completedCancellationTokenSource;
     private readonly LinkMessageBus _messageBus;
 
-    public QueueChecker(LinkMessageBus messageBus)
+    public QueueMonitor(LinkMessageBus messageBus)
     {
         _completedCancellationTokenSource = new CancellationTokenSource();
         _messageBus = messageBus;
     }
 
-    public CancellationToken CompletedCancellationToken { get { return _completedCancellationTokenSource.Token; } }
-
-    internal async Task Start()
+    public CancellationToken CompletedCancellationToken
     {
-        await Task.Delay(5_000);
+        get { return _completedCancellationTokenSource.Token; }
+    }
 
-        while (true)
+    internal Task Start()
+    {
+        var task = Task.Factory.StartNew(
+            async () =>
         {
-            await Task.Delay(1_000);
+            await Task.Delay(6_000);
 
-            if (_messageBus.Count() > 0)
+            while (true)
             {
-                continue;
-            }
+                if (_messageBus.Count() > 0)
+                {
+                    continue;
+                }
 
-            _completedCancellationTokenSource.Cancel();
-            return;
-        }
+                _completedCancellationTokenSource.Cancel();
+            }
+        }, TaskCreationOptions.LongRunning);
+
+        return task;
     }
 }

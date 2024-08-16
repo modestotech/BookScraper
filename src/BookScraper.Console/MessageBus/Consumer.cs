@@ -11,7 +11,8 @@ internal interface IConsumer
 
 internal class Consumer : IConsumer
 {
-    private static readonly object _fileLock = new();
+    private static readonly SemaphoreSlim _errorFileSemaphore = new SemaphoreSlim(1, 1);
+    private static readonly SemaphoreSlim _pageFilesSemaphore = new SemaphoreSlim(1, 1);
     private static readonly ConcurrentDictionary<string, bool> _processedLinks = new();
 
     private readonly string _baseDirectoryPath;
@@ -44,7 +45,6 @@ internal class Consumer : IConsumer
                 await _semaphore.WaitAsync();
                 try
                 {
-
                     var uri = UrlUtils.GetUri(url);
 
                     var savePath = UrlUtils.GetPath(_baseDirectoryPath, uri.AbsolutePath);
@@ -142,7 +142,9 @@ internal class Consumer : IConsumer
         var logEntry = "Could not fetch link " + uri + ". Error message: " + message;
         System.Console.WriteLine(message);
 
-        lock (_fileLock)
+        _errorFileSemaphore.Wait();
+
+        try
         {
             if (!File.Exists(_errorLogPath))
             {
@@ -154,6 +156,10 @@ internal class Consumer : IConsumer
                 using StreamWriter sw = File.AppendText(_errorLogPath);
                 sw.WriteLine(logEntry);
             }
+        }
+        finally
+        {
+            _errorFileSemaphore.Release();
         }
     }
 
@@ -171,8 +177,18 @@ internal class Consumer : IConsumer
             return default;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-        await File.WriteAllTextAsync(savePath, textContent);
+        await _pageFilesSemaphore.WaitAsync();
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+            await File.WriteAllTextAsync(savePath, textContent);
+        }
+        finally
+        {
+            _pageFilesSemaphore.Release(); // Release the semaphore
+        }
+
         return textContent;
     }
 
@@ -190,7 +206,16 @@ internal class Consumer : IConsumer
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-        await File.WriteAllBytesAsync(savePath, imageBytes);
+        await _pageFilesSemaphore.WaitAsync();
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+            await File.WriteAllBytesAsync(savePath, imageBytes);
+        }
+        finally
+        {
+            _pageFilesSemaphore.Release(); // Release the semaphore
+        }
     }
 }

@@ -11,28 +11,31 @@ var producer = new Producer(messageBus);
 var stopwatch = new Stopwatch();
 
 var progressViewer = new ProgressViewer(messageBus, baseDirectoryPath, stopwatch);
-var queueChecker = new QueueChecker(messageBus);
+var queueMonitor = new QueueMonitor(messageBus);
 
 AddRootPageToQueue(baseUrl, baseDirectoryPath, producer);
 
-int threadCount = 5;
+int threadCount = (int)(Environment.ProcessorCount * 2.5);
 var semaphore = new SemaphoreSlim(threadCount, threadCount);
+
+var queueMonitorTask = queueMonitor.Start();
 
 await StartLog(threadCount, stopwatch);
 
 var consumerTasks = Enumerable.Range(0, threadCount)
     .Select(_ =>
     {
-        var consumer = new Consumer(messageBus, baseDirectoryPath, semaphore, queueChecker.CompletedCancellationToken);
+        var consumer = new Consumer(messageBus, baseDirectoryPath, semaphore, queueMonitor.CompletedCancellationToken);
         return consumer.Process();
     });
 
-var queueCheckerTask = queueChecker.Start();
-Task progressTask = progressViewer.Start(queueChecker.CompletedCancellationToken);
+Task progressTask = progressViewer.Start(queueMonitor.CompletedCancellationToken);
 
-await Task.WhenAll(new List<Task>(consumerTasks) { progressTask });
+await Task.WhenAll(new List<Task>(consumerTasks) { progressTask, queueMonitorTask });
 
 await StopLog(baseDirectoryPath, stopwatch);
+
+Environment.Exit(0);
 
 static void AddRootPageToQueue(string baseUrl, string baseDirectoryPath, Producer producer)
 {
