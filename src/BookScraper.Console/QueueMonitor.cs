@@ -15,6 +15,8 @@ internal class QueueChecker
 
     internal async Task Start()
     {
+        await Task.Delay(5_000);
+
         while (true)
         {
             await Task.Delay(1_000);

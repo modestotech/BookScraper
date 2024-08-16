@@ -32,7 +32,7 @@ Task progressTask = progressViewer.Start(queueChecker.CompletedCancellationToken
 
 await Task.WhenAll(new List<Task>(consumerTasks) { progressTask });
 
-StopLog(baseDirectoryPath, stopwatch);
+await StopLog(baseDirectoryPath, stopwatch);
 
 static void AddRootPageToQueue(string baseUrl, string baseDirectoryPath, Producer producer)
 {
@@ -54,19 +54,20 @@ static void AddRootPageToQueue(string baseUrl, string baseDirectoryPath, Produce
 static async Task StartLog(int threadCount, Stopwatch stopwatch)
 {
     Console.WriteLine($"Will start to process with {threadCount} threads in...");
-    await Task.Delay(1500);
+    await Task.Delay(1_500);
     Console.WriteLine($"Three");
-    await Task.Delay(1000);
+    await Task.Delay(1_000);
     Console.WriteLine($"Two");
-    await Task.Delay(1000);
+    await Task.Delay(1_000);
     Console.WriteLine($"One");
     stopwatch.Start();
 }
 
-static void StopLog(string baseDirectoryPath, Stopwatch stopwatch)
+static async Task StopLog(string baseDirectoryPath, Stopwatch stopwatch)
 {
     Console.Clear();
     stopwatch.Stop();
     Console.WriteLine($"\nProcessing finished, the site can be found at {baseDirectoryPath}.");
     Console.WriteLine($"Elapesd time: {stopwatch.ElapsedMilliseconds} ms");
+    await Task.Delay(2_000);
 }

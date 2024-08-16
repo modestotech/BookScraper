@@ -88,90 +88,47 @@ internal class Consumer : IConsumer
         }
     }
 
-    private static List<string> ExtractLinks(string html, Uri currentBaseUri)
+    private static IEnumerable<string> ExtractLinks(string html, Uri currentBaseUri)
     {
         var htmlDoc = new HtmlDocument();
         htmlDoc.LoadHtml(html);
 
-        List<string> links = [];
-
-        var imageNodes = htmlDoc.DocumentNode.SelectNodes("//img");
-
-        if (imageNodes != null)
-        {
-            foreach (var img in imageNodes)
-            {
-                string imageSrc = img.GetAttributeValue("src", string.Empty);
-
-                if (UrlIsAbsolute(imageSrc))
-                {
-                    continue;
-                }
-
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, imageSrc);
-                links.Add(resolvedUrl);
-            }
-        }
-
-        var linkRelNodes = htmlDoc.DocumentNode.SelectNodes("//link");
-
-        if (linkRelNodes != null)
-        {
-            foreach (var styleSheet in linkRelNodes)
-            {
-                string linkRelHref = styleSheet.GetAttributeValue("href", string.Empty);
-
-                if (UrlIsAbsolute(linkRelHref))
-                {
-                    continue;
-                }
-
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkRelHref);
-                links.Add(resolvedUrl);
-            }
-        }
-
-        var scriptNodes = htmlDoc.DocumentNode.SelectNodes("//script");
-
-        if (scriptNodes != null)
-        {
-            foreach (var scriptNode in scriptNodes)
-            {
-                string scriptNodeSrc = scriptNode.GetAttributeValue("src", string.Empty);
-
-                if (UrlIsAbsolute(scriptNodeSrc))
-                {
-                    continue;
-                }
-
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, scriptNodeSrc);
-                links.Add(resolvedUrl);
-            }
-        }
-
-        var linkNodes = htmlDoc.DocumentNode.SelectNodes("//a");
-
-        if (linkNodes != null)
-        {
-            foreach (var link in linkNodes)
-            {
-                string linkNodeHref = link.GetAttributeValue("href", string.Empty);
-
-                if (UrlIsAbsolute(linkNodeHref))
-                {
-                    continue;
-                }
-
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkNodeHref);
-                links.Add(resolvedUrl);
-            }
-        }
+        var links = GetLinks("//img", "src", currentBaseUri)
+            .Concat(GetLinks("//link", "href", currentBaseUri))
+            .Concat(GetLinks("//script", "src", currentBaseUri))
+            .Concat(GetLinks("//a", "href", currentBaseUri));
 
         return links;
 
         static string GetResolvedUrl(Uri currentBaseUri, string imageUrl)
         {
             return new Uri(currentBaseUri, imageUrl).ToString();
+        }
+
+        List<string> GetLinks(string nodeType, string attributeValue, Uri currentBaseUri)
+        {
+            List<string> links = [];
+
+            var nodes = htmlDoc.DocumentNode.SelectNodes(nodeType);
+
+            if (nodes != null)
+            {
+                foreach (var img in nodes)
+                {
+                    string resourceUrl = img.GetAttributeValue(attributeValue, string.Empty);
+
+                    if (UrlIsAbsolute(resourceUrl))
+                    {
+                        continue;
+                    }
+
+                    string resolvedUrl = GetResolvedUrl(currentBaseUri, resourceUrl);
+
+                    links.Add(resolvedUrl);
+                }
+            }
+
+            return links;
         }
     }
 
