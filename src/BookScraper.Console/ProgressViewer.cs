@@ -1,22 +1,30 @@
-﻿using BookScraper.Console.MessageBus;
+﻿using System.Diagnostics;
+using BookScraper.Console.MessageBus;
 
 internal class ProgressViewer
 {
     private readonly string _baseDirectory;
     private readonly LinkMessageBus _messageBus;
+    private readonly Stopwatch _stopwatch;
 
-    public ProgressViewer(LinkMessageBus messageBus, string baseDirectory)
+    public ProgressViewer(LinkMessageBus messageBus, string baseDirectory, Stopwatch stopwatch)
     {
         _baseDirectory = baseDirectory;
         _messageBus = messageBus;
+        _stopwatch = stopwatch;
     }
 
-    internal async Task Start()
+    internal async Task Start(CancellationToken token)
     {
-        await Task.Delay(2000);
-
         while (true)
         {
+            await Task.Delay(1_000, CancellationToken.None);
+
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
             int fileCount;
 
             if (Directory.Exists(_baseDirectory))
@@ -37,8 +45,9 @@ internal class ProgressViewer
             }
 
             Console.Clear();
-            Console.WriteLine($"The queue currently has {_messageBus.Count()} items");
-            Console.WriteLine($"Until now {fileCount} files have been processed");
+            Console.WriteLine($"The queue currently has {_messageBus.Count()} urls to process");
+            Console.WriteLine($"Until now {fileCount} files have been downloaded");
+            Console.WriteLine($"Elapesd time: {_stopwatch.ElapsedMilliseconds} ms");
         }
     }
 }

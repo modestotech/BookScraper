@@ -4,27 +4,47 @@ using HtmlAgilityPack;
 
 namespace BookScraper.Console.MessageBus;
 
+internal interface IConsumer
+{
+    Task Process();
+}
+
 internal class Consumer : IConsumer
 {
+    private static readonly object _fileLock = new();
+    private static readonly ConcurrentDictionary<string, bool> _processedLinks = new();
+
     private readonly string _baseDirectoryPath;
+    private readonly SemaphoreSlim _semaphore;
+    private readonly CancellationToken _token;
     private readonly HttpClient _client = new();
     private readonly IMessageBus<string> _messageBus;
-    private readonly ConcurrentDictionary<string, bool> _processedLinks = new();
+    private readonly string _errorLogPath;
 
-    public Consumer(IMessageBus<string> messageBus, string baseDirectoryPath)
+    public Consumer(IMessageBus<string> messageBus, string baseDirectoryPath, SemaphoreSlim semaphore, CancellationToken token)
     {
         _messageBus = messageBus;
         _baseDirectoryPath = baseDirectoryPath;
+        _semaphore = semaphore;
+        _token = token;
+        _errorLogPath = Path.Combine(baseDirectoryPath, "errorLog.txt");
     }
 
     public async Task Process()
     {
         while (true)
         {
+            if (_token.IsCancellationRequested)
+            {
+                return;
+            }
+
             if (_messageBus.Fetch(out string url))
             {
+                await _semaphore.WaitAsync();
                 try
                 {
+
                     var uri = UrlUtils.GetUri(url);
 
                     var savePath = UrlUtils.GetPath(_baseDirectoryPath, uri.AbsolutePath);
@@ -48,9 +68,11 @@ internal class Consumer : IConsumer
 
                     foreach (var link in newLinks)
                     {
-                        if (_processedLinks.TryAdd(link, true))
+                        var cleanedLink = UrlUtils.CleanUrl(link);
+
+                        if (_processedLinks.TryAdd(cleanedLink, true))
                         {
-                            _messageBus.Add(UrlUtils.CleanUrl(link));
+                            _messageBus.Add(cleanedLink);
                         }
                     }
                 }
@@ -58,10 +80,10 @@ internal class Consumer : IConsumer
                 {
                     System.Console.WriteLine($"Error processing {url}: {ex.Message}");
                 }
-            }
-            else
-            {
-                return;
+                finally
+                {
+                    _semaphore.Release();
+                }
             }
         }
     }
@@ -79,8 +101,14 @@ internal class Consumer : IConsumer
         {
             foreach (var img in imageNodes)
             {
-                string imageUrl = img.GetAttributeValue("src", string.Empty);
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, imageUrl);
+                string imageSrc = img.GetAttributeValue("src", string.Empty);
+
+                if (UrlIsAbsolute(imageSrc))
+                {
+                    continue;
+                }
+
+                string resolvedUrl = GetResolvedUrl(currentBaseUri, imageSrc);
                 links.Add(resolvedUrl);
             }
         }
@@ -91,8 +119,14 @@ internal class Consumer : IConsumer
         {
             foreach (var styleSheet in linkRelNodes)
             {
-                string linkRelUrl = styleSheet.GetAttributeValue("href", string.Empty);
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkRelUrl);
+                string linkRelHref = styleSheet.GetAttributeValue("href", string.Empty);
+
+                if (UrlIsAbsolute(linkRelHref))
+                {
+                    continue;
+                }
+
+                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkRelHref);
                 links.Add(resolvedUrl);
             }
         }
@@ -103,8 +137,14 @@ internal class Consumer : IConsumer
         {
             foreach (var scriptNode in scriptNodes)
             {
-                string linkRelUrl = scriptNode.GetAttributeValue("src", string.Empty);
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkRelUrl);
+                string scriptNodeSrc = scriptNode.GetAttributeValue("src", string.Empty);
+
+                if (UrlIsAbsolute(scriptNodeSrc))
+                {
+                    continue;
+                }
+
+                string resolvedUrl = GetResolvedUrl(currentBaseUri, scriptNodeSrc);
                 links.Add(resolvedUrl);
             }
         }
@@ -115,8 +155,14 @@ internal class Consumer : IConsumer
         {
             foreach (var link in linkNodes)
             {
-                string hrefValue = link.GetAttributeValue("href", string.Empty);
-                string resolvedUrl = GetResolvedUrl(currentBaseUri, hrefValue);
+                string linkNodeHref = link.GetAttributeValue("href", string.Empty);
+
+                if (UrlIsAbsolute(linkNodeHref))
+                {
+                    continue;
+                }
+
+                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkNodeHref);
                 links.Add(resolvedUrl);
             }
         }
@@ -126,6 +172,31 @@ internal class Consumer : IConsumer
         static string GetResolvedUrl(Uri currentBaseUri, string imageUrl)
         {
             return new Uri(currentBaseUri, imageUrl).ToString();
+        }
+    }
+
+    private static bool UrlIsAbsolute(string imageUrl)
+    {
+        return Uri.IsWellFormedUriString(imageUrl, UriKind.Absolute);
+    }
+
+    private void WriteToErrorLog(Uri uri, string message)
+    {
+        var logEntry = "Could not fetch link " + uri + ". Error message: " + message;
+        System.Console.WriteLine(message);
+
+        lock (_fileLock)
+        {
+            if (!File.Exists(_errorLogPath))
+            {
+                using StreamWriter sw = File.CreateText(_errorLogPath);
+                sw.WriteLine(logEntry);
+            }
+            else
+            {
+                using StreamWriter sw = File.AppendText(_errorLogPath);
+                sw.WriteLine(logEntry);
+            }
         }
     }
 
@@ -139,7 +210,7 @@ internal class Consumer : IConsumer
         }
         catch (Exception ex)
         {
-            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
+            WriteToErrorLog(uri, ex.Message);
             return default;
         }
 
@@ -158,16 +229,11 @@ internal class Consumer : IConsumer
         }
         catch (Exception ex)
         {
-            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
+            WriteToErrorLog(uri, ex.Message);
             return;
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
         await File.WriteAllBytesAsync(savePath, imageBytes);
     }
-}
-
-internal interface IConsumer
-{
-    Task Process();
 }

@@ -39,22 +39,6 @@ internal static class UrlUtils
 
     internal static string GetPath(string baseDirectory, string filePath)
     {
-        /*
-
-
-        string osSpecificFilePath;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            osSpecificFilePath = filePath;
-        }
-        else
-        {
-            osSpecificFilePath = filePath.Replace(@"/", @"\");
-        }
-
-        */
-
         var hasFileExtension = Regex.IsMatch(filePath, @"\.\w{1,4}\b", RegexOptions.IgnoreCase);
 
         var path = Path.Combine(
