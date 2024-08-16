@@ -49,33 +49,21 @@ internal class ScraperService
         _queue.Enqueue(UrlUtils.CleanUrl(_baseUrl));
         _processedLinks.TryAdd(_baseUrl, true);
 
-        using (_semaphore)
+        var tasks = new List<Task>();
+
+        while (_queue.TryDequeue(out var url))
         {
-            var tasks = new List<Task>();
-
-            while (_queue.TryDequeue(out var url))
-            {
-                await _semaphore.WaitAsync();
-
-                tasks.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        await ProcessUrlAsync(url);
-                    }
-                    finally
-                    {
-                        _semaphore.Release();
-                    }
-                }));
-            }
-
-            await Task.WhenAll(tasks);
+            var currentUrl = url;
+            tasks.Add(ProcessUrlAsync(currentUrl));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     private async Task ProcessUrlAsync(string url)
     {
+        await _semaphore.WaitAsync();
+
         try
         {
             var uri = UrlUtils.GetUri(url);
@@ -105,6 +93,10 @@ internal class ScraperService
         catch (Exception ex)
         {
             Console.WriteLine($"Error processing {url}: {ex.Message}");
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 

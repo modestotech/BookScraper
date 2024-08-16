@@ -40,24 +40,26 @@ internal static class UrlUtils
     internal static string GetPath(string baseDirectory, string filePath)
     {
         /*
-                string path;
 
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                {
-                    path = filePath;
-                }
-                else
-                {
-                    path = filePath.Replace(@"/", @"\");
-                }
+
+        string osSpecificFilePath;
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            osSpecificFilePath = filePath;
+        }
+        else
+        {
+            osSpecificFilePath = filePath.Replace(@"/", @"\");
+        }
+
         */
 
         var hasFileExtension = Regex.IsMatch(filePath, @"\.\w{1,4}\b", RegexOptions.IgnoreCase);
 
         var path = Path.Combine(
             baseDirectory,
-            hasFileExtension ? filePath : "index.html"
-        );
+            hasFileExtension ? filePath.TrimStart('/') : "index.html");
 
         return Path.GetFullPath(path);
     }
