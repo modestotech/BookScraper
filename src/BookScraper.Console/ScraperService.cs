@@ -103,7 +103,7 @@ internal class ScraperService
     private async Task<string> SaveHtmlFileToDiskAndReturnHtml(Uri uri, string savePath)
     {
         var textContent = await _client.GetStringAsync(uri);
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
         await File.WriteAllTextAsync(savePath, textContent);
         return textContent;
     }
@@ -111,7 +111,7 @@ internal class ScraperService
     private async Task SaveBinaryFileToDisk(Uri uri, string savePath)
     {
         byte[] imageBytes = await _client.GetByteArrayAsync(uri);
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
         await File.WriteAllBytesAsync(savePath, imageBytes);
     }
 

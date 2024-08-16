@@ -6,11 +6,14 @@ var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, "ScrapedSite");
 
 var messageBus = new LinkMessageBus();
 var producer = new Producer(messageBus);
-var consumer = new Consumer(messageBus, baseDirectoryPath, baseUrl);
+var consumer = new Consumer(messageBus, baseDirectoryPath);
+var progressViewer = new ProgressViewer(messageBus, baseDirectoryPath);
 
 AddRootPageToQueue(baseUrl, baseDirectoryPath, producer);
 
-await consumer.Process();
+await Task.WhenAny(consumer.Process(), progressViewer.Start());
+
+Console.WriteLine($"\nProcessing finished, the site can be found at {baseDirectoryPath}.");
 
 static void AddRootPageToQueue(string baseUrl, string baseDirectoryPath, Producer producer)
 {

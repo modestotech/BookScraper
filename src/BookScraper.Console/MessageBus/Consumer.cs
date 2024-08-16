@@ -7,24 +7,21 @@ namespace BookScraper.Console.MessageBus;
 internal class Consumer : IConsumer
 {
     private readonly string _baseDirectoryPath;
-    private readonly string _baseUrl;
     private readonly HttpClient _client = new();
     private readonly IMessageBus<string> _messageBus;
     private readonly ConcurrentDictionary<string, bool> _processedLinks = new();
 
-    public Consumer(IMessageBus<string> messageBus, string baseDirectoryPath, string baseUrl)
+    public Consumer(IMessageBus<string> messageBus, string baseDirectoryPath)
     {
         _messageBus = messageBus;
         _baseDirectoryPath = baseDirectoryPath;
-        _baseUrl = baseUrl;
     }
 
     public async Task Process()
     {
-        string url;
         while (true)
         {
-            if (_messageBus.Fetch(out url))
+            if (_messageBus.Fetch(out string url))
             {
                 try
                 {
@@ -32,7 +29,7 @@ internal class Consumer : IConsumer
 
                     var savePath = UrlUtils.GetPath(_baseDirectoryPath, uri.AbsolutePath);
 
-                    var isImageContent = Regex.IsMatch(url, @"\.(gif|jpe?g|tiff?|png|webp|bmp)$", RegexOptions.IgnoreCase);
+                    var isImageContent = Regex.IsMatch(url, @"\.(gif|jpe?g|tiff?|png|webp|bmp|ico)$", RegexOptions.IgnoreCase);
 
                     if (isImageContent)
                     {
@@ -61,50 +58,15 @@ internal class Consumer : IConsumer
                 {
                     System.Console.WriteLine($"Error processing {url}: {ex.Message}");
                 }
-
-                // await _fulfillmentService.Fulfill(order);
+            }
+            else
+            {
+                return;
             }
         }
     }
 
-    private async Task<string?> SaveHtmlFileToDiskAndReturnHtml(Uri uri, string savePath)
-    {
-        string textContent;
-
-        try
-        {
-            textContent = await _client.GetStringAsync(uri);
-        }
-        catch (Exception ex)
-        {
-            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
-            return default;
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
-        await File.WriteAllTextAsync(savePath, textContent);
-        return textContent;
-    }
-
-    private async Task SaveBinaryFileToDisk(Uri uri, string savePath)
-    {
-        byte[] imageBytes;
-
-        try
-        {
-            imageBytes = await _client.GetByteArrayAsync(uri);
-        }
-        catch (Exception ex)
-        {
-            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
-            return;
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
-        await File.WriteAllBytesAsync(savePath, imageBytes);
-    }
-
-    private List<string> ExtractLinks(string html, Uri currentBaseUri)
+    private static List<string> ExtractLinks(string html, Uri currentBaseUri)
     {
         var htmlDoc = new HtmlDocument();
         htmlDoc.LoadHtml(html);
@@ -135,6 +97,17 @@ internal class Consumer : IConsumer
             }
         }
 
+        var scriptNodes = htmlDoc.DocumentNode.SelectNodes("//script");
+
+        if (scriptNodes != null)
+        {
+            foreach (var scriptNode in scriptNodes)
+            {
+                string linkRelUrl = scriptNode.GetAttributeValue("src", string.Empty);
+                string resolvedUrl = GetResolvedUrl(currentBaseUri, linkRelUrl);
+                links.Add(resolvedUrl);
+            }
+        }
 
         var linkNodes = htmlDoc.DocumentNode.SelectNodes("//a");
 
@@ -154,6 +127,43 @@ internal class Consumer : IConsumer
         {
             return new Uri(currentBaseUri, imageUrl).ToString();
         }
+    }
+
+    private async Task<string?> SaveHtmlFileToDiskAndReturnHtml(Uri uri, string savePath)
+    {
+        string textContent;
+
+        try
+        {
+            textContent = await _client.GetStringAsync(uri);
+        }
+        catch (Exception ex)
+        {
+            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
+            return default;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+        await File.WriteAllTextAsync(savePath, textContent);
+        return textContent;
+    }
+
+    private async Task SaveBinaryFileToDisk(Uri uri, string savePath)
+    {
+        byte[] imageBytes;
+
+        try
+        {
+            imageBytes = await _client.GetByteArrayAsync(uri);
+        }
+        catch (Exception ex)
+        {
+            System.Console.WriteLine("Could not fetch link " + uri + ". Error message: " + ex.Message);
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+        await File.WriteAllBytesAsync(savePath, imageBytes);
     }
 }
 
