@@ -1,31 +1,49 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using BookScraper.Console;
+using HtmlAgilityPack;
 
 internal class ScraperService
 {
     private readonly string _baseUrl;
+    private readonly string _baseDirectoryPath;
     private readonly HttpClient _client = new();
     private readonly ConcurrentQueue<string> _queue = new();
     private readonly ConcurrentDictionary<string, bool> _processedLinks = new();
+    // Why a dictionary and a bool here? Because there's no ConcurrentSet in C#, so the bool is just a dummy to enable using ConcurrentDictionary.
     private readonly SemaphoreSlim _semaphore;
 
-    public ScraperService(string baseUrl, int threadCount = 5)
+    internal ScraperService(string baseUrl, string baseDirectoryName = "ScrapedSite", int threadCount = 5)
     {
         _baseUrl = baseUrl;
+        _baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, baseDirectoryName);
         _semaphore = new SemaphoreSlim(threadCount);
     }
 
-    public async Task StartAsync()
+    internal async Task StartAsync()
     {
         if (string.IsNullOrEmpty(_baseUrl))
         {
-            throw new ArgumentNullException(nameof(_baseUrl));
+            Console.WriteLine("Exiting, base URL was not provided.");
+            Environment.Exit(-1);
         }
 
         if (!UrlUtils.UrlIsValid(_baseUrl))
         {
-            throw new ArgumentException("A valid base URL is not provided");
+            Console.WriteLine("Exiting, a valid base URL is not provided");
+            Environment.Exit(-1);
+        }
+
+        if (Directory.Exists(_baseDirectoryPath))
+        {
+            try
+            {
+                Directory.Delete(_baseDirectoryPath, true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exiting, could not delete base directory, might be in use. Error message: " + ex.Message);
+            }
         }
 
         _queue.Enqueue(UrlUtils.CleanUrl(_baseUrl));
@@ -61,7 +79,8 @@ internal class ScraperService
         try
         {
             var uri = UrlUtils.GetUri(url);
-            string savePath = Path.Combine(AppContext.BaseDirectory, uri.AbsolutePath);
+
+            var savePath = UrlUtils.GetPath(_baseDirectoryPath, uri.AbsolutePath);
 
             var isImageContent = Regex.IsMatch(url, @"\.(gif|jpe?g|tiff?|png|webp|bmp)$", RegexOptions.IgnoreCase);
 
@@ -73,7 +92,15 @@ internal class ScraperService
 
             var html = await SaveHtmlFileToDiskAndReturnHtml(uri, savePath);
 
-            AddNewLinksToQueue(html);
+            var newLinks = ExtractLinks(html);
+
+            foreach (var link in newLinks)
+            {
+                if (_processedLinks.TryAdd(link, true))
+                {
+                    _queue.Enqueue(UrlUtils.CleanUrl(link));
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -84,6 +111,7 @@ internal class ScraperService
     private async Task<string> SaveHtmlFileToDiskAndReturnHtml(Uri uri, string savePath)
     {
         var textContent = await _client.GetStringAsync(uri);
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
         await File.WriteAllTextAsync(savePath, textContent);
         return textContent;
     }
@@ -91,26 +119,41 @@ internal class ScraperService
     private async Task SaveBinaryFileToDisk(Uri uri, string savePath)
     {
         byte[] imageBytes = await _client.GetByteArrayAsync(uri);
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath));
         await File.WriteAllBytesAsync(savePath, imageBytes);
     }
 
-    private void AddNewLinksToQueue(string html)
+    private List<string> ExtractLinks(string html)
     {
-        var newLinks = ExtractLinks(html);
+        var htmlDoc = new HtmlDocument();
+        htmlDoc.LoadHtml(html);
 
-        foreach (var link in newLinks)
+        List<string> links = [];
+
+        var imageNodes = htmlDoc.DocumentNode.SelectNodes("//img");
+
+        if (imageNodes != null)
         {
-            // Add new links to the queue if not already processed
-            if (_processedLinks.TryAdd(link, true))
+            foreach (var img in imageNodes)
             {
-                _queue.Enqueue(link);
+                string imageUrl = img.GetAttributeValue("src", string.Empty);
+                string resolvedUrl = new Uri(new Uri(_baseUrl), imageUrl).ToString();
+                links.Add(resolvedUrl);
             }
         }
-    }
 
-    private IEnumerable<string> ExtractLinks(string html)
-    {
-        // Use a parser like HtmlAgilityPack or AngleSharp to extract links
-        return new List<string>(); // Placeholder
+        var linkNodes = htmlDoc.DocumentNode.SelectNodes("//a");
+
+        if (linkNodes != null)
+        {
+            foreach (var link in linkNodes)
+            {
+                string hrefValue = link.GetAttributeValue("href", string.Empty);
+                string resolvedUrl = new Uri(new Uri(_baseUrl), hrefValue).ToString();
+                links.Add(resolvedUrl);
+            }
+        }
+
+        return links;
     }
 }

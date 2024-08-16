@@ -173,3 +173,6 @@ dotnet_diagnostic.SA1602.severity = none
 
 # SA1000: Keywords should be spaced correctly
 dotnet_diagnostic.SA1000.severity = none
+
+# SA1010: Opening square brackets should be spaced correctly
+dotnet_diagnostic.SA1010.severity = none

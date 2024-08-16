@@ -1,10 +1,13 @@
-﻿namespace BookScraper.Console;
+﻿using System.Text.RegularExpressions;
+
+namespace BookScraper.Console;
 internal static class UrlUtils
 {
     internal static bool UrlIsValid(string url)
     {
-        var createdUri = Uri.TryCreate(url, UriKind.Absolute, out var uriResult);
-        return createdUri && uriResult!.Scheme == Uri.UriSchemeHttp;
+        var uriCreationResult = Uri.TryCreate(url, UriKind.Absolute, out var uriResult);
+        var protocolIsValid = uriResult!.Scheme == Uri.UriSchemeHttp || uriResult!.Scheme == Uri.UriSchemeHttps;
+        return uriCreationResult && protocolIsValid;
     }
 
     internal static string CleanUrl(string urlToClean)
@@ -15,7 +18,7 @@ internal static class UrlUtils
             Query = null,
         };
 
-        if (builder.Path.EndsWith("/"))
+        if (builder.Path.EndsWith('/'))
         {
             builder.Path = builder.Path.TrimEnd('/');
         }
@@ -32,5 +35,30 @@ internal static class UrlUtils
     {
         var builder = new UriBuilder(url);
         return builder.Uri;
+    }
+
+    internal static string GetPath(string baseDirectory, string filePath)
+    {
+        /*
+                string path;
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    path = filePath;
+                }
+                else
+                {
+                    path = filePath.Replace(@"/", @"\");
+                }
+        */
+
+        var hasFileExtension = Regex.IsMatch(filePath, @"\.\w{1,4}\b", RegexOptions.IgnoreCase);
+
+        var path = Path.Combine(
+            baseDirectory,
+            hasFileExtension ? filePath : "index.html"
+        );
+
+        return Path.GetFullPath(path);
     }
 }
