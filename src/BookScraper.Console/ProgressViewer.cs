@@ -18,7 +18,7 @@ internal class ProgressViewer
     {
         while (true)
         {
-            await Task.Delay(1_000, CancellationToken.None);
+            await Task.Delay(300, CancellationToken.None);
 
             if (token.IsCancellationRequested)
             {

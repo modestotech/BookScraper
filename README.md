@@ -1,5 +1,5 @@
 # BookScraper
-This repo is a solution to the tretton37 assignment.
+This repo is a solution to the tretton37 assignment. The assignment is to scrape the website https://books.toscrape.com/ so that it can be viewed locally.
 I've solved it with a console application in .NET/C#. The version used is the latest LTS (.NET8).
 
 ## Introduction
@@ -30,7 +30,9 @@ During processing, you'll see the progress and when finished you'll get the dire
 
 ## Notes
 ### Caveats
-- In a real scenario, probably I'd use Dependency Injection but in this assignment I skipped it to keep it focused on the task at hand. Some tests would also be added to confirm that it works as expected.
+- In a real scenario, I'd probably use Dependency Injection but in this assignment I skipped it to keep it focused on the task at hand. 
+- Tests would also be added to confirm that it works as expected.
+- Exception handling and logging should be improved. In a real case I'd use a separate logger set up in the DI container.
 - I didn't sprinkle the code with comments as I write this documentation, and we'll have a review together.
 - The dynamic content (*Products you recently viewed*) is static in this example. In a real example I would have skipped this part, as it would have been dependent on some session-storage.
 - FontAwesome source is embedded in the `css`. To download that as well the css would have to be analyzed. I skipped that as if one would like to get the rating, it's possible to extract from the css classes used in the html files.
@@ -39,7 +41,6 @@ During processing, you'll see the progress and when finished you'll get the dire
 - This was the most advanced thing that I've done with threading this far, so I took the opportunity to learn and experiment and am now looking forward to a nice code review.
 
 ### Reasoning
-My first thought was something like the flowchart below, which I made before starting the assignment, to get a grasp of the stages. It worked for the one-thread scenario, but for the threaded scenario I opted for a queue-based solution. I leave it here either way, as it's conceptually correct although it's not showing the threading logic.
 I've experimented with the thread count and read a bit on what level is appropriate for I/O intensive operations. I saw the number 2.5 times the cores so I tested that and some other settings. My machine has 16 cores so 40 threads.
 I tested that and some other configurations and 2.5 (40 threads) seems to be a sweet-spot, at least on my machine.
 
@@ -50,9 +51,14 @@ I tested that and some other configurations and 2.5 (40 threads) seems to be a s
 | 40           | 15,808 ms      |
 | 80           | 15,274 ms      |
 
-> It's important that this service always gets a thread. Sometimes this didn't happen so the cancellation token wasn't called. I solved this by telling .NET that it's a long-running task and removed awaits from the while loop so that it's never released, probably not 100% safe, but apparently .NET should give these preference.
+> It's important that `QueueMonitor` always gets a thread as this service has the responsibility to invoke Cancel on the token. At first, sometimes this didn't happen or took a long time.
+> I solved this by telling .NET to use a dedicated thread (by setting `TaskCreationOptions.LongRunning`) and used a syncronous wait (`Thread.Sleep` inside the `while` loop) to not release the thread once it has started.
 
-I added a lock for writing files, as it may happen that two threads start to process the same file (in the beginning several threads can pick up the base `index.html` before it has been inserted in the dictionary of finished files). This restriction doesn't seem to affect the performance too much when testing.
+I added a semaphore for writing files, as it happened that two threads started to process the same file (in the beginning several threads can pick up the base `index.html` before it has been inserted in the dictionary of finished files).
+This restriction doesn't seem to affect the performance too much when testing.
+
+My first thought was something like the flowchart below, which I made before starting the assignment, to get a grasp of the stages.
+It worked for the one-thread scenario, but for the threaded scenario I opted for a queue-based solution. I leave it here either way, as it's conceptually accurate although it's not showing the threading logic.
 
 #### Flowchart
 ```mermaid

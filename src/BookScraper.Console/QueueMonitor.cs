@@ -20,19 +20,21 @@ internal class QueueMonitor
     {
         var task = Task.Factory.StartNew(
             async () =>
-        {
-            await Task.Delay(6_000);
-
-            while (true)
             {
-                if (_messageBus.Count() > 0)
-                {
-                    continue;
-                }
+                await Task.Delay(6_000);
 
-                _completedCancellationTokenSource.Cancel();
-            }
-        }, TaskCreationOptions.LongRunning);
+                while (true)
+                {
+                    Thread.Sleep(500);
+
+                    if (_messageBus.Count() > 0)
+                    {
+                        continue;
+                    }
+
+                    _completedCancellationTokenSource.Cancel();
+                }
+            }, TaskCreationOptions.LongRunning);
 
         return task;
     }

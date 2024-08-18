@@ -63,6 +63,8 @@ static async Task StartLog(int threadCount, Stopwatch stopwatch)
     Console.WriteLine($"Two");
     await Task.Delay(1_000);
     Console.WriteLine($"One");
+    await Task.Delay(1_000);
+    Console.WriteLine($"Go!");
     stopwatch.Start();
 }
 
@@ -70,7 +72,7 @@ static async Task StopLog(string baseDirectoryPath, Stopwatch stopwatch)
 {
     Console.Clear();
     stopwatch.Stop();
-    Console.WriteLine($"\nProcessing finished, the site can be found at {baseDirectoryPath}.");
+    Console.WriteLine($"Processing finished, the site can be found at:\n{baseDirectoryPath}.");
     Console.WriteLine($"Elapesd time: {stopwatch.ElapsedMilliseconds} ms");
     await Task.Delay(2_000);
 }
