@@ -1,11 +1,17 @@
 ﻿using System.Text.RegularExpressions;
 
 namespace BookScraper.Console;
-internal static class UrlUtils
+public static class UrlUtils
 {
-    internal static bool UrlIsValid(string url)
+    public static bool UrlIsValid(string url)
     {
         var uriCreationResult = Uri.TryCreate(url, UriKind.Absolute, out var uriResult);
+
+        if (uriResult is null)
+        {
+            return false;
+        }
+
         var protocolIsValid = uriResult!.Scheme == Uri.UriSchemeHttp || uriResult!.Scheme == Uri.UriSchemeHttps;
         return uriCreationResult && protocolIsValid;
     }
